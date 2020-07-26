@@ -1,11 +1,137 @@
 import os
 import os.path as op
 
-from nipype.interfaces.fsl.base import (FSLCommand, isdefined)
+from nipype.interfaces.fsl.base import (isdefined)
 from nipype.interfaces.fsl.utils import split_filename
 
+from .base import FSLCommand, FSLCommandInputSpec, isdefined
+from ..base import (
+    TraitedSpec,
+    File,
+    Directory,
+    traits,
+)
+from ...utils.filemanip import split_filename
 
-class fsl_anat(FSLCommand):
+
+class FSLAnatInputSpec(FSLCommandInputSpec):
+    input_img = File(
+        exists=True,
+        desc="filename of input image (for one image only)",
+        argstr="-i %s",
+        position=-1,
+        mandatory=True,
+        xor=['directory']
+    )
+
+    directory = Directory(
+        exists=True,
+        desc="directory name for existing .anat directory where this script will be run in place",
+        argstr="-d %s",
+        position=-1,
+        mandatory=True,
+        xor=['input_img']
+    )
+
+    output_directory = Directory(
+        exists=True,
+        desc='basename of directory for output (default is input image basename followed by .anat)',
+        argstr='-o %s',
+        mandatory=False,
+    )
+
+    weakbias = traits.Bool(desc="used for images with little and/or smooth bias fields",
+                           argstr="--weakbias"
+                           )
+
+    clobber = traits.Bool(
+        desc="if .anat directory exist (as specified by -o or default from -i) then delete it and make a new one",
+        argstr="--clobber"
+    )
+
+    noreorient = traits.Int(desc="turn off step that does reorientation 2 standard (fslreorient2std)",
+                            argstr="--noreorient %d")
+
+    nocrop = traits.Bool(desc="turn off step that does automated cropping (robustfov)",
+                         argstr="--nocrop"
+                         )
+
+    nobias = traits.Bool(desc="turn off steps that do bias field correction (via FAST)",
+                         argstr="--nobias"
+                         )
+
+    noreg = traits.Bool(desc="turn off steps that do registration to standard (FLIRT and FNIRT)",
+                        argstr="--noreg"
+                        )
+
+    nononlinreg = traits.Bool(desc="turn off step that does non-linear registration (FNIRT)",
+                              argstr="--nononlinreg"
+                              )
+
+    noseg = traits.Bool(desc="turn off step that does tissue-type segmentation (FAST)",
+                        argstr="--noseg"
+                        )
+
+    nosubcortseg = traits.Bool(desc="turn off step that does sub-cortical segmentation (FIRST)",
+                               argstr="--nosubcortseg"
+                               )
+
+    image_type = traits.Str('image_type',
+                            desc="specify the type of image (choose one of T1 T2 PD - default is T1)",
+                            argstr="-t %s"
+                            )
+
+    s = traits.Int(desc="specify the value for bias field smoothing (the -l option in FAST)",
+                   argstr="-s %d")
+
+    nosearch = traits.Bool(desc="specify that linear registration uses the -nosearch option (FLIRT)",
+                           argstr="--nosearch"
+                           )
+
+    betfparam = traits.Float(
+        desc="specify f parameter for BET (only used if not running non-linear reg and also wanting brain extraction done)",
+        argstr="--betfparam %.2f"
+    )
+
+    nocleanup = traits.Bool(desc="do not remove intermediate files",
+                            argstr="--nocleanup"
+                            )
+
+
+class FSLAnatOutputSpec(TraitedSpec):
+    Out = File(exists=False, extentions='.nii',
+               desc=r"Contains either the T1, T2 or PD image (according to the -t input option) after cropping and\or "
+                    r"orientation.")
+    Out_orig = File(exists=False, extentions='.nii',
+                    desc=r"The original image (exists if the image was cropped and\or reoriented)")
+    Out_fullfov = File(exists=False, extentions='.nii',
+                       desc=r"The image in full field-of-view (exists if the image was cropped and\or reoriented)")
+    Out_orig2std = File(exists=False, extentions='.mat', desc="")
+    Out_noroi2roi = File(exists=False, extentions='.mat', desc="")
+    Out_biascorr = File(exists=False, extentions='.nii', desc="")
+    Out_to_MNI_lin = File(exists=False, extentions='.nii', desc="Linear registration output")
+    Out_to_MNI_nonlin = File(exists=False, extentions='.nii', desc="Non-linear registration output")
+    Out_to_MNI_nonlin_field = File(exists=False, extentions='.nii', desc="Non-linear warp field")
+    Out_to_MNI_nonlin_jac = File(exists=False, extentions='.nii', desc="Jacobian of the non-linear warp field")
+    Out_vols = File(exists=False, extentions='.txt',
+                    desc="A file containing a scaling factor and brain volumes, based on skull-contrained registration, "
+                         "suitable for head-size normalisation (as the scaling is based on the skull size, "
+                         "not the brain size")
+    Out_biascorr_brain = File(exists=False, extentions='.nii', desc="")
+    Out_biascorr_brain_mask = File(exists=False, extentions='.nii', desc="")
+    Out_fast_pve_0 = File(exists=False, extentions='.nii', desc="Cerebral spinal fluid segmentation")
+    Out_fast_pve_1 = File(exists=False, extentions='.nii', desc="Gray matter segmentation")
+    Out_fast_pve_2 = File(exists=False, extentions='.nii', desc="White matter segmentation")
+    Out_fast_pveseg = File(exists=False, extentions='.nii',
+                           desc="A summary image showing the tissue with the greatest partial volume fraction per voxel")
+    Out_subcort_seg = File(exists=False, extentions='.nii', desc="Summary image of all sub-cortical segmentations")
+    first_results = Directory(desc="")  # TODO: add path?
+    Out_first_all_fast_firstseg = File(exists=False, extentions='.nii', desc="")
+    Out_biascorr_to_std_sub = File(exists=False, extentions='.nii',
+                                   desc="A transformation matrix of the sub-cortical optimised MNI registration")
+
+
+class FSLAnat(FSLCommand):
     """FSL fsl_anat wrapper for pipeline to processing anatomical images (e.g. T1-weighted scans).
     https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/fsl_anat
     Examples
@@ -18,15 +144,21 @@ class fsl_anat(FSLCommand):
     """
 
     _cmd = "fsl_anat"
-    input_spec = None  # fsl_anatInputSpec
-    output_spec = None  # fsl_anatOutputSpec
+    input_spec = FSLAnatInputSpec
+    output_spec = FSLAnatOutputSpec
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
+        basename = self.inputs.input_img
+        cwd = self.inputs.output_directory
+        if not isdefined(self.inputs.output_directory):
+            cwd = os.path.abspath(self.inputs.input_img)
+        kwargs = {'basename': basename, 'cwd': cwd}
+
         # Reorient the images to the standard orientation (fslreorient2std):
         if not self.inputs.no_orient:
-            outputs["reorient2std"] = self._gen_fname("fullfov")
-            outputs["original_input"] = self._gen_fname("orig")
+            outputs["reorient2std"] = self._gen_fname(suffix="_fullfov", **kwargs)
+            outputs["original_input"] = self._gen_fname(suffix="_orig", **kwargs)
 
         # Automatically crop the image (robustfov):
         if not self.inputs.no_crop:
@@ -36,15 +168,15 @@ class fsl_anat(FSLCommand):
 
         # Bias-field correction (FAST):
         if not self.inputs.no_bias:
-            outputs["biascorr"] = self._gen_fname("biascorr")
+            outputs["biascorr"] = self._gen_fname(suffix="_biascorr", **kwargs)
 
         # Registration to standard space (FLIRT and FNIRT):
         if not self.inputs.no_reg:
-            outputs["lin"] = self._gen_fname("to_MNI_lin")
-            outputs["nonlin"] = self._gen_fname("to_MNI_nonlin")
-            outputs["nonlin_field"] = self._gen_fname("to_MNI_nonlin_field")
-            outputs["nonlin_jac"] = self._gen_fname("to_MNI_nonlin_jac")
-            outputs["vols"] = self._gen_fname("vols.txt")
+            outputs["lin"] = self._gen_fname(suffix="_to_MNI_lin", **kwargs)
+            outputs["nonlin"] = self._gen_fname(suffix="_to_MNI_nonlin", **kwargs)
+            outputs["nonlin_field"] = self._gen_fname(suffix="_to_MNI_nonlin_field", **kwargs)
+            outputs["nonlin_jac"] = self._gen_fname(suffix="_to_MNI_nonlin_jac", **kwargs)
+            outputs["vols"] = self._gen_fname(suffix="_vols.txt", **kwargs)
 
         # Brain-extraction (FNIRT-based or BET):
         outputs["biascorr_brain"] = self._gen_fname("biascorr_brain")
@@ -52,54 +184,14 @@ class fsl_anat(FSLCommand):
 
         # If tissue-type segmentation (FAST) occurs:
         if not self.inputs.no_seg:
-            _fast_gen_fname_opts = {}
-            if isdefined(self.inputs.out_basename):
-                _fast_gen_fname_opts["basename"] = self.inputs.out_basename
-                _fast_gen_fname_opts["cwd"] = os.getcwd()
-            else:
-                _fast_gen_fname_opts["basename"] = self.inputs.in_files[-1]
-                _fast_gen_fname_opts["cwd"], _, _ = split_filename(_fast_gen_fname_opts["basename"])
-
-            outputs["tissue_class_map"] = self._gen_fname(suffix="_seg", **_fast_gen_fname_opts)
-            if isdefined(self.inputs.output_biascorrected):
-                outputs["fast_bias"] = []
-                if len(self.inputs.in_files) > 1:
-                    # for multi-image segmentation there is one corrected image
-                    # per input
-                    for val, f in enumerate(self.inputs.in_files):
-                        # image numbering is 1-based
-                        outputs["fast_bias"].append(
-                            self._gen_fname(**_fast_gen_fname_opts)
-                        )
-                else:
-                    # single image segmentation has unnumbered output image
-                    outputs["fast_bias"].append(
-                        self._gen_fname(**_fast_gen_fname_opts)
-                    )
-
-            outputs["mixeltype"] = self._gen_fname(suffix="_mixeltype", **_fast_gen_fname_opts)
-            outputs["partial_volume_map"] = self._gen_fname(suffix="_pveseg", **_fast_gen_fname_opts)
+            outputs["fast_bias"] = self._gen_fname(suffix="_biascorr", **kwargs)
+            outputs["partial_volume_map"] = self._gen_fname(suffix="_fast_pveseg", **kwargs)
             outputs["partial_volume_files"] = []
             for i in range(3):
                 outputs["partial_volume_files"].append(
-                    self._gen_fname(suffix="_pve_%d" % i, **_fast_gen_fname_opts)
-                )
-
-            outputs["bias_field"] = []
-            if len(self.inputs.in_files) > 1:
-                # for multi-image segmentation there is one bias field image
-                # per input
-                for val, f in enumerate(self.inputs.in_files):
-                    # image numbering is 1-based
-                    outputs["bias_field"].append(
-                        self._gen_fname(**_fast_gen_fname_opts)
-                    )
-            else:
-                # single image segmentation has unnumbered output image
-                outputs["bias_field"].append(
-                    self._gen_fname(**_fast_gen_fname_opts)
-                )
+                    self._gen_fname(suffix="_fast_pve_%d" % i, **kwargs))
             return
+
         # If sub-cortical segmentation (FIRST) occurs:
         if not self.inputs.no_subcort_seg:
             structures = [
@@ -119,13 +211,7 @@ class fsl_anat(FSLCommand):
                 "R_Thal",
                 "BrStem",
             ]
-            _first_gen_fname_opts = {}
-            if isdefined(self.inputs.out_basename):
-                _first_gen_fname_opts["basename"] = self.inputs.out_basename
-                _first_gen_fname_opts["cwd"] = os.getcwd()
-            else:
-                _first_gen_fname_opts["basename"] = self.inputs.in_files[-1]
-                _first_gen_fname_opts["cwd"], _, _ = split_filename(_first_gen_fname_opts["basename"])
+            _first_gen_fname_opts = {"cwd": os.path.join(cwd, 'first_results')}
 
             outputs["original_segmentations"] = self._gen_fname(suffix="_all_origsegs", **_first_gen_fname_opts)
             outputs["segmentation_file"] = self._gen_fname(suffix="_all_firstseg", **_first_gen_fname_opts)
