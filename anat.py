@@ -241,10 +241,10 @@ class FSLAnat(FSLCommand):
                 "BrStem",
             ]
             outputs["Out_subcort_seg"] = self._gen_fname(suffix="_subcort_seg", **kwargs)
-            outputs["biascorr_to_std_sub"] = self._gen_fname(suffix="_biascorr_to_std_sub", **kwargs)
+            outputs["Out_biascorr_to_std_sub"] = self._gen_fname(suffix="_biascorr_to_std_sub", **kwargs)
             # The following are in a sub directory called first_results
             _first_gen_fname_opts = {"cwd": os.path.join(cwd, 'first_results')}
-            outputs["segmentation_file"] = self._gen_fname(suffix="_first_all_fast_firstseg", **_first_gen_fname_opts)
+            outputs["Out_first_all_fast_firstseg"] = self._gen_fname(suffix="_first_all_fast_firstseg", **_first_gen_fname_opts)
             outputs["Out_vtk_surfaces"] = self._gen_mesh_names("vtk_surfaces", structures)
             outputs["Out_bvars"] = self._gen_mesh_names("bvars", structures)
             return outputs
