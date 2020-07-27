@@ -89,7 +89,8 @@ class FSLAnatInputSpec(FSLCommandInputSpec):
                            )
 
     betfparam = traits.Float(
-        desc="specify f parameter for BET (only used if not running non-linear reg and also wanting brain extraction done)",
+        desc="specify f parameter for BET (only used if not running non-linear reg and also wanting brain extraction "
+             "done)",
         argstr="--betfparam %.2f"
     )
 
@@ -106,27 +107,48 @@ class FSLAnatOutputSpec(TraitedSpec):
                     desc=r"The original image (exists if the image was cropped and\or reoriented)")
     Out_fullfov = File(exists=False, extentions='.nii',
                        desc=r"The image in full field-of-view (exists if the image was cropped and\or reoriented)")
-    Out_orig2std = File(exists=False, extentions='.mat', desc="")
-    Out_noroi2roi = File(exists=False, extentions='.mat', desc="")
-    Out_biascorr = File(exists=False, extentions='.nii', desc="")
+    Out_orig2std = File(exists=False, extentions='.mat', desc="Transformation matrix to allow images to be moved "
+                                                              "between original space and standard space")
+    Out_std2orig = File(exists=False, extentions='.mat', desc="Transformation matrix to allow images to be moved "
+                                                              "between standard space and original space ")
+    Out_orig2roi = File(exists=False, extentions='.mat', desc="Transformation matrix to allow images to be moved "
+                                                              "between original space and the region of interest")
+
+    Out_roi2orig = File(exists=False, extentions='.mat', desc="Transformation matrix to allow images to be moved ")
+
+    Out_roi2nonroi = File(exists=False, extentions='.mat', desc="Transformation matrix to allow images to be moved "
+                                                                "between region of interest and non- region of "
+                                                                "interest "
+                                                                "(full field of view) in the standard space")
+    Out_nonroi2roi = File(exists=False, extentions='.mat', desc="Transformation matrix to allow images to be moved "
+                                                                "between non- region of interest (full field of view) "
+                                                                "and region of interest in the standard space")
+    Out_biascorr = File(exists=False, extentions='.nii', desc="The estimated restored input image after correction "
+                                                              "for bias field")
     Out_to_MNI_lin = File(exists=False, extentions='.nii', desc="Linear registration output")
     Out_to_MNI_nonlin = File(exists=False, extentions='.nii', desc="Non-linear registration output")
     Out_to_MNI_nonlin_field = File(exists=False, extentions='.nii', desc="Non-linear warp field")
     Out_to_MNI_nonlin_jac = File(exists=False, extentions='.nii', desc="Jacobian of the non-linear warp field")
     Out_vols = File(exists=False, extentions='.txt',
-                    desc="A file containing a scaling factor and brain volumes, based on skull-contrained registration, "
+                    desc="A file containing a scaling factor and brain volumes, based on skull-contrained "
+                         "registration, "
                          "suitable for head-size normalisation (as the scaling is based on the skull size, "
                          "not the brain size")
-    Out_biascorr_brain = File(exists=False, extentions='.nii', desc="")
-    Out_biascorr_brain_mask = File(exists=False, extentions='.nii', desc="")
+    Out_biascorr_brain = File(exists=False, extentions='.nii',
+                              desc="The estimated restored input image after correction "
+                                   "for bias field and brain extraction")
+    Out_biascorr_brain_mask = File(exists=False, extentions='.nii', desc="The estimated restored input image after "
+                                                                         "correction for bias field and extraction of "
+                                                                         "brain mask")
     Out_fast_pve_0 = File(exists=False, extentions='.nii', desc="Cerebral spinal fluid segmentation")
     Out_fast_pve_1 = File(exists=False, extentions='.nii', desc="Gray matter segmentation")
     Out_fast_pve_2 = File(exists=False, extentions='.nii', desc="White matter segmentation")
-    Out_fast_pveseg = File(exists=False, extentions='.nii',
-                           desc="A summary image showing the tissue with the greatest partial volume fraction per voxel")
+    Out_fast_pveseg = File(exists=False, extentions='.nii', desc="A summary image showing the tissue with the "
+                                                                 "greatest partial volume fraction per voxel")
     Out_subcort_seg = File(exists=False, extentions='.nii', desc="Summary image of all sub-cortical segmentations")
     first_results = Directory(desc="")  # TODO: add path?
-    Out_first_all_fast_firstseg = File(exists=False, extentions='.nii', desc="")
+    Out_first_all_fast_firstseg = File(exists=False, extentions='.nii', desc="Summary image of all sub-cortical "
+                                                                             "segmentations")
     Out_biascorr_to_std_sub = File(exists=False, extentions='.nii',
                                    desc="A transformation matrix of the sub-cortical optimised MNI registration")
 
