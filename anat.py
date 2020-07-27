@@ -9,7 +9,7 @@ from ..base import (
     TraitedSpec,
     File,
     Directory,
-    traits,
+    traits, OutputMultiPath,
 )
 from ...utils.filemanip import split_filename
 
@@ -124,7 +124,8 @@ class FSLAnatOutputSpec(TraitedSpec):
                                                                 "between non- region of interest (full field of view) "
                                                                 "and region of interest in the standard space")
     Out_biascorr = File(exists=False, extentions='.nii', desc="The estimated restored input image after correction "
-                                                              "for bias field")
+                                                              "for bias field, if tissue type segmentation occurs it "
+                                                              "is refined again")
     Out_to_MNI_lin = File(exists=False, extentions='.nii', desc="Linear registration output")
     Out_to_MNI_nonlin = File(exists=False, extentions='.nii', desc="Non-linear registration output")
     Out_to_MNI_nonlin_field = File(exists=False, extentions='.nii', desc="Non-linear warp field")
@@ -146,11 +147,13 @@ class FSLAnatOutputSpec(TraitedSpec):
     Out_fast_pveseg = File(exists=False, extentions='.nii', desc="A summary image showing the tissue with the "
                                                                  "greatest partial volume fraction per voxel")
     Out_subcort_seg = File(exists=False, extentions='.nii', desc="Summary image of all sub-cortical segmentations")
-    first_results = Directory(desc="")  # TODO: add path?
     Out_first_all_fast_firstseg = File(exists=False, extentions='.nii', desc="Summary image of all sub-cortical "
                                                                              "segmentations")
-    Out_biascorr_to_std_sub = File(exists=False, extentions='.nii',
-                                   desc="A transformation matrix of the sub-cortical optimised MNI registration")
+    Out_biascorr_to_std_sub = File(exists=False, extentions='.nii', desc="A transformation matrix of the sub-cortical "
+                                                                         "optimised MNI registration")
+    first_results = Directory(exists=False, desc="")  # TODO: add path?
+    Out_vtk_surfaces = OutputMultiPath(File(exists=False), desc="VTK format meshes for each subcortical region")
+    Out_bvars = OutputMultiPath(File(exists=False), desc="bvars for each subcortical region")
 
 
 class FSLAnat(FSLCommand):
@@ -179,40 +182,44 @@ class FSLAnat(FSLCommand):
 
         # Reorient the images to the standard orientation (fslreorient2std):
         if not self.inputs.no_orient:
-            outputs["reorient2std"] = self._gen_fname(suffix="_fullfov", **kwargs)
-            outputs["original_input"] = self._gen_fname(suffix="_orig", **kwargs)
+            outputs["Out_fullfov"] = self._gen_fname(suffix="_fullfov", **kwargs)
+            outputs["Out_orig"] = self._gen_fname(suffix="_orig", **kwargs)
+            outputs["Out_orig2std"] = self._gen_fname(suffix="_orig2std", **kwargs)
+            outputs["Out_std2orig"] = self._gen_fname(suffix="_std2orig", **kwargs)
 
         # Automatically crop the image (robustfov):
         if not self.inputs.no_crop:
-            outputs["out_roi"] = self._gen_fname("")
-            outputs["out_transform"] = self._gen_fname("out_transform")
-            pass
+            outputs["Out"] = self._gen_fname(**kwargs)
+            outputs["Out_orig2roi"] = self._gen_fname(suffix="_orig2roi", **kwargs)
+            outputs["Out_roi2orig"] = self._gen_fname(suffix="_roi2orig", **kwargs)
+
+        if not self.inputs.no_crop and not self.inputs.no_orient:
+            outputs["Out_roi2nonroi"] = self._gen_fname(suffix="_roi2nonroi", **kwargs)
+            outputs["Out_nonroi2roi"] = self._gen_fname(suffix="_nonroi2roi", **kwargs)
 
         # Bias-field correction (FAST):
         if not self.inputs.no_bias:
-            outputs["biascorr"] = self._gen_fname(suffix="_biascorr", **kwargs)
+            outputs["Out_biascorr"] = self._gen_fname(suffix="_biascorr", **kwargs)
 
         # Registration to standard space (FLIRT and FNIRT):
         if not self.inputs.no_reg:
-            outputs["lin"] = self._gen_fname(suffix="_to_MNI_lin", **kwargs)
-            outputs["nonlin"] = self._gen_fname(suffix="_to_MNI_nonlin", **kwargs)
-            outputs["nonlin_field"] = self._gen_fname(suffix="_to_MNI_nonlin_field", **kwargs)
-            outputs["nonlin_jac"] = self._gen_fname(suffix="_to_MNI_nonlin_jac", **kwargs)
-            outputs["vols"] = self._gen_fname(suffix="_vols.txt", **kwargs)
+            outputs["Out_to_MNI_lin"] = self._gen_fname(suffix="_to_MNI_lin", **kwargs)
+            outputs["Out_to_MNI_nonlin"] = self._gen_fname(suffix="_to_MNI_nonlin", **kwargs)
+            outputs["Out_to_MNI_nonlin_field"] = self._gen_fname(suffix="_to_MNI_nonlin_field", **kwargs)
+            outputs["Out_to_MNI_nonlin_jac"] = self._gen_fname(suffix="_to_MNI_nonlin_jac", **kwargs)
+            outputs["Out_vols"] = self._gen_fname(suffix="_vols", **kwargs)
 
         # Brain-extraction (FNIRT-based or BET):
-        outputs["biascorr_brain"] = self._gen_fname("biascorr_brain")
-        outputs["biascorr_brain_mask"] = self._gen_fname("biascorr_brain_mask")
+        outputs["Out_biascorr_brain"] = self._gen_fname("biascorr_brain")
+        outputs["Out_biascorr_brain_mask"] = self._gen_fname("biascorr_brain_mask")
 
         # If tissue-type segmentation (FAST) occurs:
         if not self.inputs.no_seg:
-            outputs["fast_bias"] = self._gen_fname(suffix="_biascorr", **kwargs)
-            outputs["partial_volume_map"] = self._gen_fname(suffix="_fast_pveseg", **kwargs)
-            outputs["partial_volume_files"] = []
-            for i in range(3):
-                outputs["partial_volume_files"].append(
-                    self._gen_fname(suffix="_fast_pve_%d" % i, **kwargs))
-            return
+            outputs["Out_biascorr"] = self._gen_fname(suffix="_biascorr", **kwargs)  # Refined again in this stage
+            outputs["Out_fast_pveseg"] = self._gen_fname(suffix="_fast_pveseg", **kwargs)
+            outputs["Out_fast_pve_0"] = self._gen_fname(suffix="_fast_pve_0", **kwargs)
+            outputs["Out_fast_pve_1"] = self._gen_fname(suffix="_fast_pve_1", **kwargs)
+            outputs["Out_fast_pve_2"] = self._gen_fname(suffix="_fast_pve_2", **kwargs)
 
         # If sub-cortical segmentation (FIRST) occurs:
         if not self.inputs.no_subcort_seg:
@@ -233,14 +240,13 @@ class FSLAnat(FSLCommand):
                 "R_Thal",
                 "BrStem",
             ]
+            outputs["Out_subcort_seg"] = self._gen_fname(suffix="_subcort_seg", **kwargs)
+            outputs["biascorr_to_std_sub"] = self._gen_fname(suffix="_biascorr_to_std_sub", **kwargs)
+            # The following are in a sub directory called first_results
             _first_gen_fname_opts = {"cwd": os.path.join(cwd, 'first_results')}
-
-            outputs["original_segmentations"] = self._gen_fname(suffix="_all_origsegs", **_first_gen_fname_opts)
-            outputs["segmentation_file"] = self._gen_fname(suffix="_all_firstseg", **_first_gen_fname_opts)
-            outputs["subcort_seg"] = self._gen_fname(suffix="_subcort_seg", **_first_gen_fname_opts)
-            outputs["biascorr_to_std_sub"] = self._gen_fname(suffix="_biascorr_to_std_sub", **_first_gen_fname_opts)
-            outputs["vtk_surfaces"] = self._gen_mesh_names("vtk_surfaces", structures)
-            outputs["bvars"] = self._gen_mesh_names("bvars", structures)
+            outputs["segmentation_file"] = self._gen_fname(suffix="_first_all_fast_firstseg", **_first_gen_fname_opts)
+            outputs["Out_vtk_surfaces"] = self._gen_mesh_names("vtk_surfaces", structures)
+            outputs["Out_bvars"] = self._gen_mesh_names("bvars", structures)
             return outputs
 
     # TODO: note that everything but the mat and subcort_seg is inside a file called first_results
