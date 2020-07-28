@@ -1,15 +1,13 @@
 import os
-import os.path as op
 
-from nipype.interfaces.fsl.base import (isdefined)
-from nipype.interfaces.fsl.utils import split_filename
-
-from .base import FSLCommand, FSLCommandInputSpec, isdefined
+from .base import FSLCommand, FSLCommandInputSpec
 from ..base import (
     TraitedSpec,
+    isdefined,
     File,
     Directory,
-    traits, OutputMultiPath,
+    OutputMultiPath,
+    traits,
 )
 from ...utils.filemanip import split_filename
 
@@ -163,7 +161,7 @@ class FSLAnat(FSLCommand):
     --------
 
     >>> from nipype.interfaces import fsl
-    >>> fsl_anat = fsl.fsl_anat()
+    >>> fsl_anat = fsl.FSLAnat()
     >>> fsl_anat.inputs.in_file = 'structural.nii'
     >>> res = fsl_anat.run() #doctest: +SKIP
     """
@@ -244,7 +242,8 @@ class FSLAnat(FSLCommand):
             outputs["Out_biascorr_to_std_sub"] = self._gen_fname(suffix="_biascorr_to_std_sub", **kwargs)
             # The following are in a sub directory called first_results
             _first_gen_fname_opts = {"cwd": os.path.join(cwd, 'first_results')}
-            outputs["Out_first_all_fast_firstseg"] = self._gen_fname(suffix="_first_all_fast_firstseg", **_first_gen_fname_opts)
+            outputs["Out_first_all_fast_firstseg"] = self._gen_fname(suffix="_first_all_fast_firstseg",
+                                                                     **_first_gen_fname_opts)
             outputs["Out_vtk_surfaces"] = self._gen_mesh_names("vtk_surfaces", structures)
             outputs["Out_bvars"] = self._gen_mesh_names("bvars", structures)
             return outputs
@@ -257,12 +256,12 @@ class FSLAnat(FSLCommand):
             vtks = list()
             for struct in structures:
                 vtk = prefix + "-" + struct + "_first.vtk"
-                vtks.append(op.abspath(vtk))
+                vtks.append(os.path.abspath(vtk))
             return vtks
         if name == "bvars":
             bvars = list()
             for struct in structures:
                 bvar = prefix + "-" + struct + "_first.bvars"
-                bvars.append(op.abspath(bvar))
+                bvars.append(os.path.abspath(bvar))
             return bvars
         return None
